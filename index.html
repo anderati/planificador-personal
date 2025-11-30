@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planificador de Productividad</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Configuración de colores de Tailwind para usar tonos Lila
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary-lilac': '#7B2CBF', // Lila principal
+                        'dark-lilac': '#5A189A',   // Lila oscuro para texto y bordes
+                        'light-lilac': '#E0BBE4',  // Lila claro para acentos
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Importamos solo la fuente Sans-serif limpia 'Inter' */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #ffffff; 
+            color: #1a1a1a; 
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        /* Aseguramos que los elementos que antes usaban Serif ahora usen Inter */
+        h1, h2, h3, .serif-font {
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+        }
+
+        /* Estilo de enlaces/botones tipo "Editorial" */
+        .nav-link {
+            position: relative;
+            cursor: pointer;
+            padding-bottom: 2px;
+            color: #999;
+            transition: color 0.3s ease;
+            font-weight: 500;
+        }
+        .nav-link:hover {
+            color: #5A189A; /* Dark Lilac on hover */
+        }
+        .nav-link.active {
+            color: #5A189A; /* Dark Lilac for active */
+            border-bottom: 2px solid #5A189A;
+        }
+
+        /* Checkbox minimalista cuadrado (ahora con borde Lila) */
+        .checkbox-brutal {
+            appearance: none;
+            width: 1.2rem;
+            height: 1.2rem;
+            border: 1px solid #5A189A;
+            background: transparent;
+            cursor: pointer;
+            display: grid;
+            place-content: center;
+            transition: all 0.2s;
+        }
+        .checkbox-brutal::before {
+            content: "";
+            width: 0.6em;
+            height: 0.6em;
+            background: #5A189A;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+        }
+        .checkbox-brutal:checked::before {
+            transform: scale(1);
+        }
+
+        /* Utilidades para tablas limpias */
+        .table-row {
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .table-row:last-child {
+            border-bottom: none;
+        }
+        
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 200px;
+        }
+        
+        /* Loading spinner CSS */
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #7B2CBF;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col px-6 py-10 max-w-5xl mx-auto">
+
+    <!-- Header Limpio - Eliminado "atheneidai" -->
+    <header class="mb-16 border-b border-dark-lilac pb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+        <div>
+            <h1 class="text-3xl md:text-4xl font-semibold tracking-tight text-dark-lilac">Planificador de Productividad</h1>
+            <span class="text-sm font-light block mt-1 text-gray-500">Gestión de Rutinas y Hábitos Semanales</span>
+        </div>
+        
+        <!-- KPIs Minimalistas -->
+        <div class="flex gap-12 text-sm font-medium">
+            <div class="flex flex-col">
+                <span class="text-xs text-gray-400 uppercase tracking-widest mb-1">Job Search</span>
+                <span class="text-xl font-semibold text-dark-lilac">7.5h</span>
+            </div>
+            <div class="flex flex-col">
+                <span class="text-xs text-gray-400 uppercase tracking-widest mb-1">Skill Dev</span>
+                <span class="text-xl font-semibold text-dark-lilac">19h</span>
+            </div>
+            <div class="flex flex-col">
+                <span class="text-xs text-gray-400 uppercase tracking-widest mb-1">Bienestar</span>
+                <span class="text-xl font-semibold text-dark-lilac">9.5h</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="w-full space-y-20">
+
+        <!-- Selector de Estrategia (Tipo Menú) -->
+        <section>
+            <div class="flex flex-col md:flex-row gap-8 md:gap-12 mb-8 border-b border-gray-100 pb-4">
+                <button onclick="updateStrategy('option1')" id="btn-option1" class="nav-link text-lg active">
+                    I. The Sandwich
+                </button>
+                <button onclick="updateStrategy('option2')" id="btn-option2" class="nav-link text-lg">
+                    II. Eat the Frog
+                </button>
+                <button onclick="updateStrategy('option3')" id="btn-option3" class="nav-link text-lg">
+                    III. Circadian Flow
+                </button>
+            </div>
+            <p id="routine-context" class="text-gray-600 text-lg font-light leading-relaxed max-w-2xl">
+                <!-- Texto dinámico -->
+            </p>
+        </section>
+
+        <!-- Tracker Semanal (Tabla Limpia) -->
+        <section>
+            <div class="flex justify-between items-baseline mb-6">
+                <h2 class="text-3xl font-semibold text-dark-lilac">Habbits Tracker</h2>
+                <div class="text-sm">
+                    <span id="progress-text" class="font-semibold text-xl mr-2 text-dark-lilac">0%</span>
+                    <button onclick="resetTracker()" class="text-xs text-gray-400 hover:text-dark-lilac underline">Reset</button>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="text-xs uppercase tracking-widest text-gray-400 border-b border-dark-lilac">
+                            <th class="py-4 font-normal w-1/4">Actividad</th>
+                            <th class="py-4 font-normal text-center">L</th>
+                            <th class="py-4 font-normal text-center">M</th>
+                            <th class="py-4 font-normal text-center">X</th>
+                            <th class="py-4 font-normal text-center">J</th>
+                            <th class="py-4 font-normal text-center">V</th>
+                            <th class="py-4 font-normal text-center">S</th>
+                            <th class="py-4 font-normal text-center">D</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tracker-body" class="text-sm">
+                        <!-- JS Insert -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Horario y Analíticas -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-16">
+            
+            <!-- Columna Horario -->
+            <div class="lg:col-span-2">
+                
+                <!-- Título y Botón de Gemini -->
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-3xl font-semibold text-dark-lilac">Horario Estructurado</h2>
+                    <button id="generate-plan-btn" onclick="requestDetailedPlan()" 
+                            class="px-4 py-2 bg-primary-lilac text-white text-sm font-medium rounded-lg shadow-lg shadow-primary-lilac/30 hover:bg-dark-lilac transition duration-150 active:scale-95 disabled:opacity-50 flex items-center gap-2"
+                            disabled>
+                        <span id="plan-btn-text">Generar Plan Detallado ✨</span>
+                        <div id="plan-loader" class="spinner hidden"></div>
+                    </button>
+                </div>
+                
+                <div id="schedule-grid" class="overflow-x-auto pb-4">
+                    <!-- JS Insert -->
+                </div>
+                
+                <!-- Output Area for Generated Plan by Gemini -->
+                <div id="plan-output-container" class="mt-8 pt-8 border-t border-light-lilac hidden">
+                    <h3 class="text-xl font-semibold text-dark-lilac mb-4">
+                        Plan de Micro-Tareas Detalladas (Generado por IA)
+                    </h3>
+                    <div id="plan-output" class="bg-gray-50 p-4 rounded-lg text-sm text-gray-700 whitespace-pre-wrap leading-relaxed border border-gray-100">
+                        <!-- Contenido generado aquí -->
+                    </div>
+                    <div id="plan-sources" class="text-xs text-gray-500 mt-3 space-y-1"></div>
+                </div>
+
+            </div>
+
+            <!-- Columna Analíticas -->
+            <div class="lg:col-span-1 space-y-12">
+                <div>
+                    <h3 class="text-sm uppercase tracking-widest text-gray-400 mb-6 border-b border-gray-100 pb-2">Distribución</h3>
+                    <div class="chart-container">
+                        <canvas id="distributionChart"></canvas>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-sm uppercase tracking-widest text-gray-400 mb-6 border-b border-gray-100 pb-2">Fricción Mental</h3>
+                    <div class="chart-container">
+                        <canvas id="energyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+    
+    <footer class="mt-20 border-t border-dark-lilac pt-8 text-xs text-gray-400 flex justify-between">
+        <span>© 2025 Productivity System</span>
+        <span>Local Storage Enabled. IA Model: Gemini.</span>
+    </footer>
+
+    <!-- JS Logic -->
+    <script>
+        // --- Gemini API Configuration ---
+        const API_KEY = ""; 
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`;
+        
+        // --- Datos y Configuración (Sin cambios) ---
+        const habits = [
+            { id: 'job', label: 'Búsqueda Empleo' },
+            { id: 'code', label: 'Codecademy (Full-Stack)' },
+            { id: 'cyber', label: 'Ciberseguridad' },
+            { id: 'proj', label: 'Proyectos Negocio' },
+            { id: 'well', label: 'Creatividad (Piano/Dibujo)' },
+            { id: 'sport', label: 'Deporte (Run/Swim)' }
+        ];
+
+        const strategies = {
+            option1: {
+                name: "I. The Sandwich",
+                routineText: "La estrategia del Sándwich: Protege tu moral intercalando la difícil búsqueda de empleo entre bloques de programación profunda y proyectos creativos.",
+                targets: {
+                    job:   [1, 1, 1, 1, 1, 0, 0],
+                    code:  [1, 1, 1, 1, 1, 0, 0],
+                    cyber: [1, 0, 1, 0, 1, 0, 1],
+                    proj:  [1, 0, 1, 0, 1, 1, 1],
+                    well:  [0, 1, 0, 1, 0, 1, 1],
+                    sport: [1, 1, 1, 1, 1, 0, 0]
+                },
+                distribution: [15, 30, 10, 15, 15, 15],
+                energyCurve: [20, 70, 80, 40, 60, 50, 85, 30]
+            },
+            option2: {
+                name: "II. Eat the Frog",
+                routineText: "Eat the Frog: Elimina la ansiedad desde la mañana. Dedica los primeros 90 minutos a la búsqueda de empleo y disfruta el resto del día aprendiendo.",
+                targets: {
+                    job:   [1, 1, 1, 1, 1, 0, 0],
+                    code:  [1, 1, 1, 1, 1, 0, 0],
+                    cyber: [1, 0, 1, 0, 1, 1, 0],
+                    proj:  [0, 1, 0, 1, 0, 1, 1],
+                    well:  [1, 0, 1, 0, 1, 1, 1],
+                    sport: [1, 1, 1, 1, 1, 0, 0]
+                },
+                distribution: [20, 30, 10, 15, 10, 15],
+                energyCurve: [20, 90, 50, 30, 60, 40, 70, 20]
+            },
+            option3: {
+                name: "III. Circadian Flow",
+                routineText: "Flujo Circadiano: Si tu mente está más afilada por la mañana, úsala para el código complejo. Deja las tareas administrativas de empleo para la tarde.",
+                targets: {
+                    job:   [1, 1, 1, 1, 1, 0, 0],
+                    code:  [1, 1, 1, 1, 1, 0, 0],
+                    cyber: [1, 0, 1, 0, 1, 1, 0],
+                    proj:  [0, 1, 0, 1, 0, 1, 1],
+                    well:  [1, 0, 0, 0, 1, 1, 1],
+                    sport: [1, 1, 1, 1, 1, 0, 0]
+                },
+                distribution: [10, 35, 10, 15, 15, 15],
+                energyCurve: [20, 60, 70, 30, 50, 40, 80, 20]
+            }
+        };
+
+        const scheduleData = {
+            option1: [
+                { time: "08:00", mon: "", tue: "Swim", wed: "", thu: "Swim", fri: "", sat: "", sun: "" },
+                { time: "10:00", mon: "Job Search", tue: "Code", wed: "Job Search", thu: "Code", fri: "Job Search", sat: "Math", sun: "Cyber" },
+                { time: "11:30", mon: "Code", tue: "Job Search", wed: "Code", thu: "Job Search", fri: "Code", sat: "Project", sun: "Project" },
+                { time: "14:00", mon: "Comida", tue: "Comida", wed: "Comida", thu: "Comida", fri: "Comida", sat: "Comida", sun: "Comida" },
+                { time: "15:00", mon: "Cyber", tue: "Code", wed: "Cyber", thu: "Code", fri: "Cyber", sat: "Draw", sun: "Essay" },
+                { time: "17:00", mon: "Project", tue: "Piano", wed: "Project", thu: "Piano", fri: "Project", sat: "Write", sun: "Plan" },
+                { time: "18:00", mon: "Run", tue: "-", wed: "-", thu: "-", fri: "Run", sat: "-", sun: "-" },
+                { time: "20:00", mon: "-", tue: "-", wed: "Run", thu: "-", fri: "-", sat: "-", sun: "-" },
+            ],
+            option2: [
+                { time: "08:00", mon: "", tue: "Swim", wed: "", thu: "Swim", fri: "", sat: "", sun: "" },
+                { time: "11:00", mon: "Job Search", tue: "Job Search", wed: "Job Search", thu: "Job Search", fri: "Job Search", sat: "Project", sun: "Project" },
+                { time: "12:30", mon: "Code", tue: "Code", wed: "Code", thu: "Code", fri: "Code", sat: "Cyber", sun: "Math" },
+                { time: "15:30", mon: "Cyber", tue: "Project", wed: "Cyber", thu: "Project", fri: "Cyber", sat: "Draw", sun: "Essay" },
+                { time: "17:00", mon: "Run", tue: "Code", wed: "Piano", thu: "Code", fri: "Run", sat: "Piano", sun: "Write" },
+                { time: "18:00", mon: "Write", tue: "Math", wed: "Project", thu: "Math", fri: "Project", sat: "-", sun: "-" },
+                 { time: "20:00", mon: "-", tue: "-", wed: "Run", thu: "-", fri: "-", sat: "-", sun: "-" },
+            ],
+            option3: [
+                { time: "08:00", mon: "", tue: "Swim", wed: "", thu: "Swim", fri: "", sat: "", sun: "" },
+                { time: "10:30", mon: "Code", tue: "Code", wed: "Code", thu: "Code", fri: "Code", sat: "Math", sun: "Project" },
+                { time: "13:00", mon: "Job Search", tue: "Job Search", wed: "Job Search", thu: "Job Search", fri: "Job Search", sat: "Cyber", sun: "Draw" },
+                { time: "15:00", mon: "Cyber", tue: "Project", wed: "Cyber", thu: "Project", fri: "Cyber", sat: "Project", sun: "Essay" },
+                { time: "16:30", mon: "Piano", tue: "Math", wed: "Project", thu: "Math", fri: "Piano", sat: "Write", sun: "Plan" },
+                { time: "17:30", mon: "Run", tue: "-", wed: "-", thu: "-", fri: "Run", sat: "-", sun: "-" },
+                 { time: "20:00", mon: "-", tue: "-", wed: "Run", thu: "-", fri: "-", sat: "-", sun: "-" },
+            ]
+        };
+
+        // --- Estado y Lógica (Sin cambios en funcionalidad) ---
+        let currentStrategy = 'option1';
+        let trackerState = JSON.parse(localStorage.getItem('minimalTracker')) || {};
+        let distChart, energyChart;
+
+        function init() {
+            initCharts();
+            updateStrategy('option1');
+            renderTracker();
+            // Habilitar el botón después de la inicialización
+            document.getElementById('generate-plan-btn').disabled = false;
+        }
+
+        function updateStrategy(option) {
+            currentStrategy = option;
+            const strat = strategies[option];
+
+            // UI Menu
+            document.querySelectorAll('.nav-link').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`btn-${option}`).classList.add('active');
+
+            // Textos
+            document.getElementById('routine-context').innerText = strat.routineText;
+
+            // Renderizados
+            renderSchedule(option);
+            renderTracker();
+
+            // Charts Update
+            distChart.data.datasets[0].data = strat.distribution;
+            distChart.update();
+            energyChart.data.datasets[0].data = strat.energyCurve;
+            energyChart.update();
+            
+            // Ocultar la salida de IA al cambiar de estrategia
+            document.getElementById('plan-output-container').classList.add('hidden');
+            document.getElementById('plan-output').innerHTML = '';
+            document.getElementById('plan-sources').innerHTML = '';
+        }
+
+        function renderSchedule(option) {
+            const container = document.getElementById('schedule-grid');
+            const data = scheduleData[option];
+            
+            let html = `<table class="w-full text-left border-collapse text-sm">
+                <thead>
+                    <tr class="text-xs uppercase tracking-widest text-gray-400 border-b border-dark-lilac">
+                        <th class="py-3 font-normal w-16">Hora</th>
+                        <th class="py-3 font-normal">Lun</th>
+                        <th class="py-3 font-normal">Mar</th>
+                        <th class="py-3 font-normal">Mié</th>
+                        <th class="py-3 font-normal">Jue</th>
+                        <th class="py-3 font-normal">Vie</th>
+                        <th class="py-3 font-normal text-gray-500">Sáb</th>
+                        <th class="py-3 font-normal text-gray-500">Dom</th>
+                    </tr>
+                </thead>
+                <tbody class="text-black">`;
+
+            data.forEach(row => {
+                const getStyle = (txt) => {
+                    if(!txt || txt === "-") return "text-gray-200";
+                    if(txt === "Comida") return "text-gray-400 italic";
+                    if(txt.includes("Job")) return "font-medium underline decoration-1 underline-offset-4 decoration-primary-lilac";
+                    return "";
+                };
+
+                html += `<tr class="table-row hover:bg-gray-50 transition-colors">
+                    <td class="py-3 text-gray-400 text-xs font-mono">${row.time}</td>
+                    ${['mon','tue','wed','thu','fri','sat','sun'].map(day => `
+                        <td class="py-3 ${getStyle(row[day])}">${row[day]}</td>
+                    `).join('')}
+                </tr>`;
+            });
+            html += `</tbody></table>`;
+            container.innerHTML = html;
+        }
+
+        function renderTracker() {
+            const container = document.getElementById('tracker-body');
+            const targets = strategies[currentStrategy].targets;
+            let html = '';
+            let totalRequired = 0, totalChecked = 0;
+
+            habits.forEach(habit => {
+                const habitTargets = targets[habit.id]; 
+                let rowHtml = `<tr class="table-row group">
+                    <td class="py-4 font-medium">${habit.label}</td>`;
+
+                for(let i=0; i<7; i++) {
+                    const dayKey = `${currentStrategy}-${habit.id}-${i}`;
+                    const isRequired = habitTargets[i] === 1;
+                    const isChecked = trackerState[dayKey] === true;
+
+                    if(isRequired) totalRequired++;
+                    if(isRequired && isChecked) totalChecked++;
+
+                    let cellContent = '';
+                    if(isRequired) {
+                        cellContent = `<input type="checkbox" class="checkbox-brutal mx-auto" 
+                            onchange="toggleHabit('${dayKey}')" ${isChecked ? 'checked' : ''}>`;
+                    } else {
+                        cellContent = `<div class="w-1 h-1 bg-gray-200 rounded-full mx-auto"></div>`;
+                    }
+                    rowHtml += `<td class="py-4 text-center">${cellContent}</td>`;
+                }
+                rowHtml += `</tr>`;
+                html += rowHtml;
+            });
+            container.innerHTML = html;
+            
+            // Update Text Percent
+            const percent = totalRequired === 0 ? 0 : Math.round((totalChecked / totalRequired) * 100);
+            document.getElementById('progress-text').innerText = `${percent}% Completado`;
+        }
+
+        function toggleHabit(key) {
+            trackerState[key] = !trackerState[key];
+            localStorage.setItem('minimalTracker', JSON.stringify(trackerState));
+            renderTracker();
+        }
+
+        function resetTracker() {
+             // Usar un modal simple en lugar de confirm()
+            const shouldReset = window.prompt("Escribe 'RESET' para confirmar el borrado de todos los datos de seguimiento:");
+            if (shouldReset === 'RESET') {
+                trackerState = {};
+                localStorage.removeItem('minimalTracker');
+                renderTracker();
+            } else if (shouldReset !== null) {
+                console.log("Reseteo cancelado o texto incorrecto.");
+            }
+        }
+
+        function initCharts() {
+            // Configuración Lila para Chart.js
+            Chart.defaults.font.family = "'Inter', sans-serif";
+            Chart.defaults.color = "#999";
+            
+            // Distribución Chart
+            const ctxDist = document.getElementById('distributionChart').getContext('2d');
+            distChart = new Chart(ctxDist, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Job', 'Code', 'Cyber', 'Proj', 'Well', 'Sport'],
+                    datasets: [{
+                        data: [],
+                        // Tonos Lila
+                        backgroundColor: ['#5A189A', '#7B2CBF', '#9D4EDD', '#C77DFF', '#E0BBE4', '#F7F2F9'],
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '85%',
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            // Energy Chart
+            const ctxEnergy = document.getElementById('energyChart').getContext('2d');
+            energyChart = new Chart(ctxEnergy, {
+                type: 'line',
+                data: {
+                    labels: ['8', '10', '12', '14', '15', '17', '18', '20'],
+                    datasets: [{
+                        label: 'Intensidad',
+                        data: [],
+                        borderColor: '#5A189A', // Lila Oscuro
+                        borderWidth: 1.5,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#7B2CBF',
+                        pointRadius: 3,
+                        tension: 0.4,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false, drawBorder: false } },
+                        y: { display: false, min: 0, max: 100 }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', init);
+        
+        // --- Gemini API Logic for Plan Generation ---
+
+        /**
+         * Formats the current strategy and schedule data into a readable string for the LLM.
+         * @returns {string} The formatted schedule text.
+         */
+        function getScheduleSummary() {
+            const currentStrategyData = strategies[currentStrategy];
+            const schedule = scheduleData[currentStrategy];
+            const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+            const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+            
+            let summary = `Estrategia Actual: ${currentStrategyData.name} - "${currentStrategyData.routineText}"\n\n`;
+            summary += "Horario Semanal Detallado:\n";
+
+            // Get all unique activities across the week
+            const uniqueActivities = new Set();
+            schedule.forEach(row => {
+                days.forEach(day => {
+                    if (row[day] && row[day] !== 'Comida' && row[day] !== '-') {
+                        uniqueActivities.add(row[day]);
+                    }
+                });
+            });
+
+            // Structure the summary by day
+            dayNames.forEach((dayName, index) => {
+                const dayKey = days[index];
+                summary += `\n--- ${dayName} ---\n`;
+                schedule.forEach(row => {
+                    if (row[dayKey] && row[dayKey] !== '-') {
+                        summary += `${row.time}: ${row[dayKey]}\n`;
+                    }
+                });
+            });
+
+            return summary;
+        }
+        
+        /**
+         * Fetches a detailed plan from the Gemini API based on the current schedule.
+         */
+        async function requestDetailedPlan() {
+            const btn = document.getElementById('generate-plan-btn');
+            const outputContainer = document.getElementById('plan-output-container');
+            const outputDiv = document.getElementById('plan-output');
+            const sourcesDiv = document.getElementById('plan-sources');
+            const loader = document.getElementById('plan-loader');
+            const btnText = document.getElementById('plan-btn-text');
+
+            outputContainer.classList.remove('hidden');
+            outputDiv.innerHTML = `<p class="text-center italic text-gray-400">Generando plan, por favor espera...</p>`;
+            sourcesDiv.innerHTML = '';
+            loader.classList.remove('hidden');
+            btnText.innerText = 'Generando...';
+            btn.disabled = true;
+
+            const scheduleText = getScheduleSummary();
+            const systemPrompt = "Actúa como un coach de productividad de élite y un experto en optimización de rutinas. Tu tarea es analizar el plan semanal proporcionado y transformarlo en un 'Plan de Micro-Tareas' extremadamente detallado y accionable, con un tono motivador y profesional. Para cada actividad principal (ej. 'Job Search', 'Code', 'Project'), genera 3-5 sub-tareas o puntos de enfoque específicos para la semana, organizados claramente por día. Responde SOLAMENTE con el plan detallado, usando formato Markdown para listas y secciones.";
+            const userQuery = `Analiza la siguiente rutina semanal y genera el Plan de Micro-Tareas detalladas, teniendo en cuenta la estrategia general:\n\n${scheduleText}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+
+            let maxRetries = 3;
+            let delay = 1000;
+            let resultText = '';
+            let resultSources = [];
+
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+
+                    if (candidate && candidate.content?.parts?.[0]?.text) {
+                        resultText = candidate.content.parts[0].text;
+                        
+                        // Extract grounding sources (if any)
+                        const groundingMetadata = candidate.groundingMetadata;
+                        if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                            resultSources = groundingMetadata.groundingAttributions
+                                .map(attribution => ({
+                                    uri: attribution.web?.uri,
+                                    title: attribution.web?.title,
+                                }))
+                                .filter(source => source.uri && source.title);
+                        }
+                        break; // Success, exit loop
+                    } else {
+                        throw new Error("Invalid response structure from API.");
+                    }
+                } catch (error) {
+                    console.error(`Attempt ${i + 1} failed:`, error);
+                    if (i < maxRetries - 1) {
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2; // Exponential backoff
+                    } else {
+                        resultText = 'Error: No se pudo generar el plan detallado después de varios intentos. Inténtalo de nuevo más tarde.';
+                    }
+                }
+            }
+            
+            // Final Display
+            outputDiv.innerText = resultText;
+            
+            if (resultSources.length > 0) {
+                sourcesDiv.innerHTML = `
+                    <p class="font-bold text-xs text-dark-lilac">Fuentes utilizadas:</p>
+                    ${resultSources.map(source => 
+                        `<a href="${source.uri}" target="_blank" class="block text-primary-lilac hover:underline">${source.title}</a>`
+                    ).join('')}
+                `;
+            } else {
+                sourcesDiv.innerHTML = '<span class="text-xs text-gray-400">Este contenido fue generado puramente por el modelo de IA basado en la estructura de tu plan.</span>';
+            }
+
+            loader.classList.add('hidden');
+            btnText.innerText = 'Generar Plan Detallado ✨';
+            btn.disabled = false;
+        }
+
+    </script>
+</body>
+</html>
